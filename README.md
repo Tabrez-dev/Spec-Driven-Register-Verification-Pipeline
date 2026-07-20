@@ -100,21 +100,32 @@ Step by step:
    compiled/dropped test counts. Re-running edits the same comment instead of
    stacking new ones.
 
-### How a register's reset value is known
+### How a register's reset value is known (and a caveat about this SVD)
 
 keelhaul reads the reset value from the SVD's `<resetValue>` and `<resetMask>`
 tags, following CMSIS-SVD's inheritance: those tags can be declared at the
-**device → peripheral → register** level, inner overriding outer. A register has
-a known reset value if one is defined at its level or inherited from an enclosing
-scope. On the demo chip the whole file declares `<resetValue>` **once**, at the
-device level (`0`), and all 781 registers inherit it; the generated assertion is
-literally `resetValue & resetMask`.
+**device → peripheral → register** level, with an inner scope overriding an outer
+one. keelhaul resolves each register by walking that chain — so a register's own
+reset value is used when the SVD provides one.
 
-This is why coverage is 760/781: every register inherits a known reset value, so
-the gap is purely **readability** — keelhaul only emits the reset assertion for
-registers it can read back, and the 21 excluded are write-only. (keelhaul trusts
-the spec's masks; it has an `--ignore-reset-masks` escape hatch for vendor SVDs
-whose masks are misconfigured — the check is only as strong as the spec.)
+The demo SVD, though, provides none. This particular file (from the community
+`cmsis-svd-data` set) declares `<resetValue>` and `<resetMask>` **exactly once**,
+both at the device level and both `0`, and no peripheral or register overrides
+them. So all 781 registers resolve to an expected reset value of `0`, and the
+reset tests effectively assert "every readable register reads `0` at reset."
+That's a real check but a weak one — wrong wherever the true reset value is
+non-zero.
+
+This is a property of the **input spec, not the pipeline**. keelhaul is already
+looking for per-register reset values; this file simply doesn't contain them. A
+richer SVD — for example the official vendor CMSIS-pack SVD, which carries real
+per-register reset values — runs through the exact same pipeline with no code
+change and produces stronger reset tests automatically.
+
+(Coverage is 760/781 for a separate reason: every register inherits a known reset
+value, so the 21-register gap is purely **readability** — keelhaul only emits a
+reset assertion for registers it can read back, and the 21 excluded are
+write-only.)
 
 ## Why the AI stays cheap
 
