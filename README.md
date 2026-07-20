@@ -60,7 +60,7 @@ stale, and the reviewer gets a summary of exactly what moved.
 flowchart TB
     A["An engineer edits the chip spec (an SVD file)<br/>and opens a pull request"]
     A --> B["The pipeline inspects the spec <b>before</b> the change<br/>(base = main) and <b>after</b> it (head = the PR),<br/>using <b>keelhaul</b>"]
-    B --> C["<b>keelhaul</b> regenerates the whole register test suite<br/>from the new spec — read tests + reset-value tests,<br/>none written by hand"]
+    B --> C["<b>keelhaul</b> regenerates the whole register test suite<br/>from the new spec — one test per register (a read,<br/>plus a reset-value check when known), none by hand"]
     B --> D["Compare the before/after facts into a<br/>plain-English summary of what moved"]
     C --> E["Compile the generated tests for the ARM chip.<br/>Build-only: if it compiles against the new spec, it passes.<br/>(The tests are not executed — see Future work.)"]
     E --> F["Post the summary + build result as a PR comment"]
@@ -85,8 +85,11 @@ Step by step:
    many registers, how many have a known reset value — without changing
    anything. The pipeline does this on both the old and new spec.
 3. **Generate** — [`keelhaul`](https://github.com/soc-hub-fi/keelhaul)
-   regenerates the whole register test suite (read tests + reset-value tests)
-   from the new spec.
+   regenerates the whole register test suite from the new spec. It emits **one
+   test per register**: a volatile read of the register's address, plus — when
+   the spec documents a reset value — an assertion that the read matches it.
+   (A "reset" test is a read test with the value check layered on, which is why
+   it can only be generated alongside the read test.)
 4. **Compile gate** — the generated crate must build for the target triple
    (`thumbv7em-none-eabihf`). This *is* the pass criterion. Nothing is executed.
 5. **Impact summary** — a two-layer summary: **facts** computed in code by
@@ -139,6 +142,11 @@ tests. This project was inspired by keelhaul and wraps it in a
 spec-change-driven CI pipeline: keelhaul does the generation, and this repo adds
 the trigger, the compile gate, the diff-based impact summary, and the PR
 reporting.
+
+The approach is described in the paper it comes from: R. Hämäläinen, H.
+Lunnikivi, and T. Hämäläinen, *"Memory Mapped I/O Register Test Case Generator
+for Large Systems-on-Chip,"* 2023 IEEE Nordic Circuits and Systems Conference
+(NorCAS) — [ieeexplore.ieee.org/document/10305453](https://ieeexplore.ieee.org/document/10305453).
 
 ## Challenges faced during development
 
