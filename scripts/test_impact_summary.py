@@ -53,7 +53,7 @@ def test_degrades_when_llm_absent():
         )
         assert r.returncode == 0, r.stderr
         body = open(out).read()
-        assert "skipped" in body and "| base | head |" in body, body
+        assert "deterministically" in body and "| base | head |" in body, body
 
 
 if __name__ == "__main__":

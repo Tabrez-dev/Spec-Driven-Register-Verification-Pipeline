@@ -177,8 +177,9 @@ def main():
 
     prose = narrative(diff_text, base_text, head_text)
     if prose is None:
-        prose = ("_LLM narrative skipped: no headless LLM CLI available. "
-                 "The counts below are computed deterministically._")
+        prose = ("_Summary generated deterministically from the spec. "
+                 "An optional LLM-written narrative is added when an LLM token is "
+                 "configured._")
 
     with open(args.out, "w") as f:
         f.write((prose + "\n\n" + facts(base_text, head_text, diff_text)).strip() + "\n")
