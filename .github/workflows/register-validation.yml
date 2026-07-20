@@ -21,25 +21,33 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      # Step 1 — check out the PR, with full history so we can read the old spec.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # Step 2 — install the Rust toolchain plus the embedded ARM target.
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv7em-none-eabihf
 
+      # Step 3 — install the test generator (pinned commit).
       - name: Install keelhaul
         run: |
           cargo install --git https://github.com/soc-hub-fi/keelhaul \
             --rev "$KEELHAUL_REV" keelhaul-cli
 
-      # Read-only keelhaul commands on base and head. --svd requires --arch on
-      # every subcommand, not only gen-regtest.
+      # Step 4 — inspect the spec before and after the change, and save the diff.
+      # (--svd requires --arch on every subcommand, not only gen-regtest.)
       - name: Introspect
         run: |
           set -euo pipefail
-          introspect() {  # $1 = svd path, $2 = output path
+
+          # Step 4a — one helper that runs the three read-only commands on a spec
+          # and writes the facts to a file. $1 = spec path, $2 = output file.
+          introspect() {
+            # Step 4b — if the spec doesn't exist at this revision (a PR that
+            # *adds* an SVD has no old version), write a placeholder and skip.
             if [ ! -s "$1" ]; then echo "(no SVD at this revision)" > "$2"; return; fi
             {
               echo "== ls-top =="             ; keelhaul ls-top            --svd "$1" --arch 32
@@ -47,13 +55,20 @@ jobs:
               echo "== count-reset-values ==" ; keelhaul count-reset-values --svd "$1" --arch 32
             } > "$2"
           }
+
+          # Step 4c — grab the OLD spec from the base branch (empty if it's new).
           git show "origin/${{ github.base_ref }}:$SVD" > base.svd 2>/dev/null || : > base.svd
+
+          # Step 4d — introspect old spec, then new spec.
           introspect base.svd introspect-base.txt
           introspect "$SVD"  introspect-head.txt
-          # 40KB cap keeps a pathological diff out of the LLM input. Raise it if
-          # real spec changes ever get truncated.
+
+          # Step 4e — the actual changed lines, capped at 40KB so a pathological
+          # diff can't blow up the LLM input. Raise the cap if real spec changes
+          # ever get truncated.
           git diff -U3 "origin/${{ github.base_ref }}" -- "$SVD" | head -c 40000 > svd.diff
 
+      # Step 5 — regenerate the test suite from the new spec and make it compile.
       # --on-fail panic, not error: with --on-fail error the generated Error enum
       # types read_val/reset_val as u32 while the test bodies cast to u64, so the
       # suite does not compile. That is a keelhaul codegen bug, not ours. Switch
@@ -69,17 +84,15 @@ jobs:
           python3 scripts/fixup_generated.py < generated.rs > testcrate/src/lib.rs 2> dropped.txt
           echo "dropped $(cat dropped.txt) duplicate register definitions"
 
-      # The pass criterion: the regenerated suite provably builds against the
-      # new spec for the target triple.
+      # Step 6 — the pass criterion: the regenerated suite must build for the ARM
+      # target. If it doesn't, the spec change broke the tests and the PR goes red.
       - name: Compile gate
         working-directory: testcrate
         run: cargo build --target "$TARGET"
 
-      # Install the headless LLM CLI only when its auth token is present. Absent,
-      # the summary falls through to deterministic facts (its own guard handles a
-      # missing binary), so a fork PR without secrets still runs green.
-      # LLM_CLI_TOKEN is the repository secret; the env var name on the right is
-      # the one the installed CLI reads, so it must stay as-is.
+      # Step 7 — install the AI CLI only when its token is configured. Without it,
+      # the summary falls back to the deterministic facts table (the script's own
+      # guard handles a missing binary), so a PR without secrets still runs green.
       - name: Set up LLM (optional)
         if: env.LLM_CLI_TOKEN != ''
         env:
@@ -87,6 +100,8 @@ jobs:
         run: |
           [ -n "$LLM_CLI_TOKEN" ] && curl -fsSL https://claude.ai/install.sh | bash
 
+      # Step 8 — build the impact summary (deterministic facts + optional AI prose)
+      # from the diff and the two introspection files.
       - name: Impact summary
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.LLM_CLI_TOKEN }}
@@ -95,6 +110,7 @@ jobs:
             --diff svd.diff --base introspect-base.txt --head introspect-head.txt \
             --out summary.md
 
+      # Step 9 — post it all as one PR comment, editing the previous one in place.
       - name: PR comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
