@@ -130,26 +130,6 @@ The model only writes the prose. The result: the AI cost per PR stays near zero
 regardless of how large the chip spec is, and every figure in the summary is
 exact and reproducible whether or not the model runs.
 
-## Design decisions
-
-**GitHub Actions, not a hosted workflow engine.** The trigger (SVD changed in a
-PR), the diff, and the reporting surface (PR comment) all live in GitHub. A
-hosted engine would add a server and a webhook hop for no new capability; the
-committed workflow YAML is itself the artifact.
-
-**Tests are generated, never hand-written.** That is the whole idea — tests are
-derived from the spec, so a spec change regenerates them for free. `keelhaul` is
-installed from git and **pinned to a commit**, because its generated output feeds
-the compile gate and an unpinned tool would make a green build unreproducible.
-
-**Compile gate stays in the MVP.** AI-only impact analysis was considered and
-rejected: the gate costs one CI step and is what makes the summary trustworthy —
-the regenerated suite provably builds against the new spec.
-
-**Execution (running the tests on emulated silicon) is deferred.** The MVP story
-is complete at the compile gate, and emulator bring-up is the riskiest work — so
-it is future work, not a blocker for a working, demoable pipeline.
-
 ## Built on keelhaul
 
 The test generation is done by **[keelhaul](https://github.com/soc-hub-fi/keelhaul)**,
