@@ -22,21 +22,32 @@ never stale and the reviewer gets a plain-English summary of what moved.
 ## How it works
 
 ```mermaid
-flowchart LR
-    A[PR edits soc.svd] --> B[Introspect<br/>ls-top · count-registers<br/>count-reset-values<br/>base vs head]
-    A --> C[Generate<br/>keelhaul gen-regtest]
-    C --> D[Compile gate<br/>cargo build --target<br/>thumbv7em-none-eabihf]
-    B --> E[Impact summary<br/>deterministic facts<br/>+ LLM narrative]
-    D --> F[PR comment]
-    E --> F
+flowchart TB
+    A["An engineer edits the chip spec (an SVD file)<br/>and opens a pull request"]
+    A --> B["The pipeline reads the register map from the spec<br/><b>before</b> the change (base = main) and <b>after</b> it (head = the PR),<br/>using <b>keelhaul</b>"]
+    B --> C["<b>keelhaul</b> regenerates the whole register test suite<br/>from the new spec — read tests + reset-value tests,<br/>none written by hand"]
+    B --> D["Diff the before/after numbers into a<br/>plain-English summary of what moved"]
+    C --> E["Compile the generated tests for the ARM chip.<br/>Build-only: if it compiles against the new spec, it passes.<br/>(The tests are not executed — see Future work.)"]
+    E --> F["Post the summary + build result as a PR comment"]
+    D --> F
 ```
+
+> **base vs head** are GitHub's names for the two sides of a pull request:
+> **base** is what you merge into (the old spec on `main`), **head** is your
+> branch (the new spec). The pipeline compares the register map on both.
+
+**The tests are generated and compiled, not run.** Proving the regenerated suite
+still builds against the changed spec is the pass criterion; executing it on an
+emulator is future work.
+
+Step by step:
 
 1. **Trigger** — a GitHub Actions workflow fires on PRs touching `svd/**`. The
    SVD path is a workflow variable; the pipeline is chip-agnostic.
 2. **Introspect** — read-only tooling counts peripherals, registers, and
    testable reset values on both the base and head revision.
 3. **Generate** — [`keelhaul`](https://github.com/soc-hub-fi/keelhaul)
-   regenerates the whole register test suite (read + reset-value tests) from the
+   regenerates the whole register test suite (read tests + reset-value tests) from the
    head SVD.
 4. **Compile gate** — the generated crate must build for the target triple
    (`thumbv7em-none-eabihf`). This *is* the pass criterion: the regenerated
