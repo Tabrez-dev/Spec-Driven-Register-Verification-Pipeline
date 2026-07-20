@@ -140,31 +140,73 @@ spec-change-driven CI pipeline: keelhaul does the generation, and this repo adds
 the trigger, the compile gate, the diff-based impact summary, and the PR
 reporting.
 
-## Sharp edges found while building this
+## Challenges faced during development
 
-The generator's documented flags were not its actual flags. These were found by
-building the tool and running it against the real SVD, and are all handled in the
-pipeline:
+**The generator isn't a package, and its documented flags were wrong.** keelhaul
+is not published on crates.io — its CLI has a path dependency on its library — so
+it can only be installed from git. And its documented flag surface did not match
+the built binary. Four wrong forms, all found by building the tool and running it
+against the real SVD (not by trusting the docs):
 
 - `--svd` requires `--arch` on **every** subcommand, not only generation.
-- Flags are kebab-case (`--on-fail`, not `--on_fail`); `--test reset` requires
-  `--test read`.
+- Flags are kebab-case (`--on-fail`, not `--on_fail`).
+- `--test reset` requires `--test read` — asking for reset tests alone crashes
+  the CLI.
 - `--on-fail error` generates code that does not compile (the error type uses
   `u32` where the test body casts to `u64`). The pipeline uses `--on-fail panic`;
-  the `error` path is wanted for the execution phase and is blocked on an
-  upstream fix.
-- Vendor SVDs define the same address twice — the TM4C123 declares **43**
-  alternate/overlaid registers (e.g. `USB0_TXINTERVAL7`, I2C `MCS`). The
-  generator emits a duplicate function per definition, so the raw output fails to
-  compile. [`scripts/fixup_generated.py`](scripts/fixup_generated.py) drops
-  repeats **only when the bodies are byte-identical**, reports the count, and
-  fails loudly if two definitions disagree about one address — that is a spec
-  bug, not noise.
+  the `error` path is wanted for the execution phase and is blocked on this
+  upstream bug.
+
+*Lesson:* a tool's documented interface is not its real interface — build it and
+run it before designing around it.
+
+**The generated code doesn't compile as-is.** Two problems, both handled in
+[`scripts/fixup_generated.py`](scripts/fixup_generated.py):
+
+- The output is a bare Rust module — no `#![no_std]`, non-snake-case names — so it
+  won't build for an embedded target. The script adds the crate attributes.
+- Vendor SVDs define the **same register at the same address twice** — the
+  TM4C123 does this 43 times (e.g. USB registers that mean different things in
+  host vs device mode). keelhaul emits one function per definition, so the raw
+  output fails to compile (`E0428`). The script drops repeats **only when the
+  bodies are byte-identical**, reports the count, and **fails loudly if two
+  definitions disagree** about one address — because that is a real spec
+  inconsistency, not noise to be swallowed.
+
+**Keeping the AI cheap, optional, and key-free.** The raw spec pair is ~1.9 MB;
+sending it to a model every PR would be slow and expensive. The fix is the
+deterministic/LLM split — the model only ever sees the small diff, and all exact
+numbers are computed in code, so the pipeline is fully correct even with the AI
+turned off. The AI layer also runs through a headless CLI rather than a metered
+API key, so the whole thing works on a normal Claude subscription with no key to
+buy or leak.
+
+**Making a green build mean something.** keelhaul's generated output feeds the
+compile gate, so the tool is **pinned to a specific commit** — an unpinned
+generator could change its output and silently turn a red build green (or vice
+versa), making CI results unreproducible.
+
+## How to read this repo
+
+Read it in this order — it goes from the map to the machinery:
+
+1. **This README** — the overview you're in.
+2. **[`.github/workflows/register-validation.yml`](.github/workflows/register-validation.yml)**
+   — the spine of the project. Every step of the pipeline is here, in order, and
+   numbered `Step 1…9`. Reading it top to bottom *is* reading how the project
+   runs.
+3. **[`scripts/impact_summary.py`](scripts/impact_summary.py)** — the most
+   interesting logic: the deterministic facts layer plus the optional AI call.
+   Start at `main()` at the bottom, then read `facts()` and `narrative()`.
+4. **[`scripts/fixup_generated.py`](scripts/fixup_generated.py)** — small and
+   self-contained: the duplicate-register handling described above.
+5. **`testcrate/`** and **`svd/`** — the target crate the tests land in, and the
+   demo spec. Skim these last.
 
 ## Repository layout
 
 ```
-.github/workflows/register-validation.yml   the pipeline
+.github/workflows/register-validation.yml   the pipeline (start here after the README)
 svd/TM4C123GH6PM.svd                         demo memory map (the SVD)
 scripts/impact_summary.py                    deterministic facts + optional AI narrative
 scripts/fixup_generated.py                   make the generated Rust compile
