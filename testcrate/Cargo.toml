@@ -1,0 +1,12 @@
+[package]
+name = "regtest"
+version = "0.0.0"
+edition = "2021"
+
+# A no_std *lib* crate is the smallest artifact that gates compilation -- no
+# panic handler, no linker script, no runtime. The execution phase (future work)
+# turns this into a binary with a UART harness.
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

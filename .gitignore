@@ -1,0 +1,9 @@
+target/
+base.svd
+*.diff
+generated.rs
+dropped.txt
+summary.md
+comment.md
+introspect-*.txt
+__pycache__/
