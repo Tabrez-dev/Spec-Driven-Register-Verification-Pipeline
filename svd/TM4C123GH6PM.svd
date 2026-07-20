@@ -39,7 +39,7 @@
   <width>32</width>
   <size>32</size>
   <access>read-write</access>
-  <resetValue>0</resetValue>
+  <resetValue>0x00000001</resetValue>
   <resetMask>0</resetMask>
   <peripherals>
     <peripheral>
@@ -22696,7 +22696,7 @@
         <register>
           <name>PPI2C</name>
           <description>Inter-Integrated Circuit Peripheral Present</description>
-          <addressOffset>0x00000320</addressOffset>
+          <addressOffset>0x00000324</addressOffset>
           <fields>
             <field>
               <name>SYSCTL_PPI2C_P0</name>
@@ -22825,7 +22825,7 @@
         <register>
           <name>PPEEPROM</name>
           <description>EEPROM Peripheral Present</description>
-          <addressOffset>0x00000358</addressOffset>
+          <addressOffset>0x0000035c</addressOffset>
           <fields>
             <field>
               <name>SYSCTL_PPEEPROM_P0</name>
