@@ -100,6 +100,22 @@ Step by step:
    compiled/dropped test counts. Re-running edits the same comment instead of
    stacking new ones.
 
+### How a register's reset value is known
+
+keelhaul reads the reset value from the SVD's `<resetValue>` and `<resetMask>`
+tags, following CMSIS-SVD's inheritance: those tags can be declared at the
+**device → peripheral → register** level, inner overriding outer. A register has
+a known reset value if one is defined at its level or inherited from an enclosing
+scope. On the demo chip the whole file declares `<resetValue>` **once**, at the
+device level (`0`), and all 781 registers inherit it; the generated assertion is
+literally `resetValue & resetMask`.
+
+This is why coverage is 760/781: every register inherits a known reset value, so
+the gap is purely **readability** — keelhaul only emits the reset assertion for
+registers it can read back, and the 21 excluded are write-only. (keelhaul trusts
+the spec's masks; it has an `--ignore-reset-masks` escape hatch for vendor SVDs
+whose masks are misconfigured — the check is only as strong as the spec.)
+
 ## Why the AI stays cheap
 
 The two versions of the spec are about **1.9 MB of XML together** — very roughly
