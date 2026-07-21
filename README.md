@@ -30,6 +30,17 @@ with a checkable reset value, all derived from the spec, none typed by hand.
   of diff — so the cost per PR stays near zero no matter how big the chip is.
 - **Chip-agnostic.** The whole pipeline is parameterized by a single SVD path.
 
+## The problem
+
+Memory-map specs change constantly: peripherals get added, register offsets
+shift, reset values change. Every such change silently invalidates the
+verification suite, and today someone finds out by hand — diffing XML, updating
+tests, and triaging failures that might be spec bugs, implementation bugs, or
+stale tests. Making the spec change itself the trigger means the suite is never
+stale, and the reviewer gets a summary of exactly what moved.
+
+<img width="928" height="968" alt="image" src="https://github.com/user-attachments/assets/7c3ed631-6d0e-45db-9cb5-cf5b3f18d3eb" />
+
 ## Background: what is an SVD?
 
 **SVD** stands for **System View Description** — an XML file, in ARM's CMSIS-SVD
@@ -44,15 +55,6 @@ The related format **IP-XACT** (IEEE 1685) describes hardware for *chip design*
 The generator used here reads SVD today, with IP-XACT support planned upstream —
 so the pipeline only touches the spec at two stages, and would gain IP-XACT for
 free if the generator ships it.
-
-## The problem it solves
-
-Memory-map specs change constantly: peripherals get added, register offsets
-shift, reset values change. Every such change silently invalidates the
-verification suite, and today someone finds out by hand — diffing XML, updating
-tests, and triaging failures that might be spec bugs, implementation bugs, or
-stale tests. Making the spec change itself the trigger means the suite is never
-stale, and the reviewer gets a summary of exactly what moved.
 
 ## How it works
 
